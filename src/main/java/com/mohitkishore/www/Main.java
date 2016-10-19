@@ -9,25 +9,28 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.ArrayList;
 
 public class Main {
 
     private static final String PRODUCTS = "products";
+    private static final String VARIANTS = "variants";
+    private static final String PRICE = "price";
+    private static final String API_END_POINT_BASE_URL = "http://shopicruit.myshopify.com/products.json?";
+    private static final String PAGE_QUERY = "page=";
+    private static double totalPrice = 0.0;
 
-    private static String getJSONString() throws Exception {
 
+    private static String getJSONString(String buildUrl) throws Exception {
         //String to hold value of the returned data
         String resultJsonStr = null;
         HttpURLConnection urlConnection = null;
         BufferedReader reader = null;
-        String urlString = "http://shopicruit.myshopify.com/products.json?";
 
         try {
 
-            URL url = new URL(urlString);
+            URL url = new URL(buildUrl);
 
-            // Create the request , and open the connection
+            // Create the request and open the connection
             urlConnection = (HttpURLConnection) url.openConnection();
             urlConnection.setRequestMethod("GET");
             urlConnection.connect();
@@ -37,6 +40,7 @@ public class Main {
             StringBuilder buffer = new StringBuilder();
             if (inputStream == null) {
                 // Nothing to do.
+                System.out.println("Input stream is null");
                 return null;
             }
             reader = new BufferedReader(new InputStreamReader(inputStream));
@@ -46,7 +50,7 @@ public class Main {
                 // Since it's JSON, adding a newline isn't necessary (it won't affect parsing)
                 // But it does make debugging easier if you print out the completed
                 // buffer for debugging.
-                buffer.append(line + "\n");
+                buffer.append(line).append("\n");
             }
 
             if (buffer.length() == 0) {
@@ -55,8 +59,7 @@ public class Main {
             }
             resultJsonStr = buffer.toString();
         } catch (IOException e) {
-            // If the code didn't successfully get the weather data, there's no point in attemping
-            // to parse it.
+            // If the code didn't successfully get the data, there's no point need to parse it
             return null;
         } finally {
             if (urlConnection != null) {
@@ -73,24 +76,62 @@ public class Main {
         return resultJsonStr;
     }
 
-    public static ArrayList<String> getJSONArray(String resultJsonStr){
+    private static void getJSONArray(JSONObject resultJson) {
 
-        JSONObject resultJsonObject = new JSONObject(resultJsonStr);
-        JSONArray productsArray = resultJsonObject.getJSONArray(PRODUCTS);
+        JSONArray productsArray = resultJson.getJSONArray(PRODUCTS);
 
-        ArrayList<String> resultList = new ArrayList<String>();
-        System.out.println(productsArray.length());
+        System.out.println("Number of products : " + productsArray.length());
+        for (int i = 0; i < productsArray.length(); i++) {
+            JSONObject prodJson = productsArray.getJSONObject(i);
+            //System.out.println(prodJson.toString());
+            JSONArray variants = prodJson.getJSONArray(VARIANTS);
+            for (int j = 0; j < variants.length(); j++) {
+                JSONObject variantObj = variants.getJSONObject(j);
+                String price = variantObj.getString(PRICE);
+                double pr = Double.parseDouble(price);
+                totalPrice = totalPrice + pr;
+            }
 
-
-        return null;
+        }
     }
+
     public static void main(String[] args) {
 
+        JSONObject emptyObj = new JSONObject();
+        JSONArray emptyProductsArray = new JSONArray();
+        emptyObj.put("products", emptyProductsArray);
         try {
-            Main.getJSONArray(Main.getJSONString());
+
+            int pageNum = 1;
+            StringBuilder urlStringBuilder = new StringBuilder(API_END_POINT_BASE_URL);
+            urlStringBuilder.append(PAGE_QUERY);
+            String urlString = urlStringBuilder.toString() + pageNum;
+            System.out.println(urlString);
+            JSONObject returnedValue = new JSONObject(Main.getJSONString(urlString));
+            Main.getJSONArray(returnedValue);
+
+            while(hasProducts(emptyObj, returnedValue)){
+                pageNum++;
+                urlString = urlStringBuilder.toString() + pageNum;
+                System.out.println(urlString);
+                returnedValue = new JSONObject(Main.getJSONString(urlString));
+                Main.getJSONArray(returnedValue);
+            };
+            System.out.printf("Total cost to buy all watches = %.4f\n", totalPrice);
         } catch (Exception e) {
             System.out.println("Oh-oh error");
             e.printStackTrace();
+        }
+    }
+
+    private static boolean hasProducts(JSONObject emptyObj, JSONObject returnedValue) {
+        boolean returnVal = false;
+        if (emptyObj.toString().trim().equals(returnedValue.toString().trim())) {
+            // products array is empty
+            return false;
+        } else {
+            // DUDDDDE products exists.
+            return true;
         }
     }
 }
